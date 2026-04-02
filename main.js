@@ -17,7 +17,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.9;
+renderer.toneMappingExposure = 0.92;
 renderer.setClearColor(0x000000, 1);
 app.appendChild(renderer.domElement);
 
@@ -46,19 +46,22 @@ controls.maxPolarAngle = Math.PI - 0.12;
 const ambient = new THREE.AmbientLight(0xffffff, 0.04);
 scene.add(ambient);
 
-const warmLight = new THREE.PointLight(0xff8d3a, 5.5, 35, 2);
+const warmLight = new THREE.PointLight(0xff8d3a, 4.8, 36, 2);
 warmLight.position.set(0, 0, 0);
 scene.add(warmLight);
 
-const coolLight = new THREE.PointLight(0x507dff, 0.7, 80, 2);
+const coolLight = new THREE.PointLight(0x507dff, 0.65, 80, 2);
 coolLight.position.set(-10, 7, -8);
 scene.add(coolLight);
 
+const root = new THREE.Group();
+scene.add(root);
+
 const blackHoleGroup = new THREE.Group();
-scene.add(blackHoleGroup);
+root.add(blackHoleGroup);
 
 const diskGroup = new THREE.Group();
-scene.add(diskGroup);
+root.add(diskGroup);
 
 const clock = new THREE.Clock();
 
@@ -159,12 +162,12 @@ function createAccretionTexture(size = 1024) {
   const outer = size * 0.47;
 
   const grad = ctx.createRadialGradient(cx, cy, inner, cx, cy, outer);
-  grad.addColorStop(0.0, 'rgba(255,245,210,0.0)');
-  grad.addColorStop(0.08, 'rgba(255,245,210,0.85)');
+  grad.addColorStop(0.00, 'rgba(255,245,210,0.0)');
+  grad.addColorStop(0.10, 'rgba(255,245,210,0.92)');
   grad.addColorStop(0.24, 'rgba(255,190,90,0.95)');
-  grad.addColorStop(0.52, 'rgba(255,120,30,0.55)');
-  grad.addColorStop(0.82, 'rgba(120,40,10,0.18)');
-  grad.addColorStop(1.0, 'rgba(0,0,0,0.0)');
+  grad.addColorStop(0.56, 'rgba(255,120,30,0.58)');
+  grad.addColorStop(0.84, 'rgba(120,40,10,0.18)');
+  grad.addColorStop(1.00, 'rgba(0,0,0,0.0)');
 
   ctx.fillStyle = grad;
   ctx.beginPath();
@@ -175,19 +178,18 @@ function createAccretionTexture(size = 1024) {
   ctx.beginPath();
   ctx.arc(cx, cy, inner, 0, Math.PI * 2);
   ctx.fill();
-
   ctx.globalCompositeOperation = 'source-over';
 
-  for (let i = 0; i < 1600; i++) {
+  for (let i = 0; i < 1900; i++) {
     const angle = Math.random() * Math.PI * 2;
     const radius = inner + Math.random() * (outer - inner);
-    const x = cx + Math.cos(angle + radius * 0.015) * radius;
-    const y = cy + Math.sin(angle + radius * 0.015) * radius;
+    const x = cx + Math.cos(angle + radius * 0.017) * radius;
+    const y = cy + Math.sin(angle + radius * 0.017) * radius;
 
-    const alpha = 0.015 + Math.random() * 0.08;
+    const alpha = 0.012 + Math.random() * 0.07;
     const dotSize = 0.5 + Math.random() * 2.2;
     const hue = 26 + Math.random() * 18;
-    const light = 45 + Math.random() * 30;
+    const light = 42 + Math.random() * 32;
 
     ctx.fillStyle = `hsla(${hue}, 100%, ${light}%, ${alpha})`;
     ctx.beginPath();
@@ -203,46 +205,80 @@ function createAccretionTexture(size = 1024) {
 
 const accretionTexture = createAccretionTexture();
 
-const diskGeometry = new THREE.RingGeometry(2.0, 6.0, 256, 32);
-const diskMaterial = new THREE.MeshBasicMaterial({
-  map: accretionTexture,
-  transparent: true,
-  side: THREE.DoubleSide,
-  depthWrite: false,
-  blending: THREE.AdditiveBlending
-});
+function createDiskMesh(innerRadius, outerRadius, opacity, renderOrder) {
+  const material = new THREE.MeshBasicMaterial({
+    map: accretionTexture,
+    transparent: true,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    depthTest: true,
+    blending: THREE.AdditiveBlending,
+    opacity
+  });
 
-const disk = new THREE.Mesh(diskGeometry, diskMaterial);
-disk.rotation.x = -Math.PI * 0.5;
-disk.scale.y = 0.09;
-disk.renderOrder = 2;
-diskGroup.add(disk);
+  const mesh = new THREE.Mesh(
+    new THREE.RingGeometry(innerRadius, outerRadius, 320, 24),
+    material
+  );
 
-const diskGlowGeometry = new THREE.RingGeometry(1.8, 6.8, 256, 16);
-const diskGlowMaterial = new THREE.MeshBasicMaterial({
-  color: 0xffa347,
-  transparent: true,
-  opacity: 0.12,
-  side: THREE.DoubleSide,
-  depthWrite: false,
-  blending: THREE.AdditiveBlending
-});
+  mesh.rotation.x = -Math.PI * 0.5;
+  mesh.scale.y = 0.085;
+  mesh.renderOrder = renderOrder;
 
-const diskGlow = new THREE.Mesh(diskGlowGeometry, diskGlowMaterial);
+  return mesh;
+}
+
+const backDisk = createDiskMesh(2.0, 6.0, 0.48, 1);
+diskGroup.add(backDisk);
+
+const frontDisk = createDiskMesh(2.0, 6.0, 0.72, 11);
+diskGroup.add(frontDisk);
+
+const diskGlow = new THREE.Mesh(
+  new THREE.RingGeometry(1.8, 7.0, 320, 8),
+  new THREE.MeshBasicMaterial({
+    color: 0xffa347,
+    transparent: true,
+    opacity: 0.12,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    depthTest: true,
+    blending: THREE.AdditiveBlending
+  })
+);
 diskGlow.rotation.x = -Math.PI * 0.5;
 diskGlow.scale.y = 0.11;
-diskGlow.renderOrder = 1;
+diskGlow.renderOrder = 2;
 diskGroup.add(diskGlow);
+
+const diskCoreGlow = new THREE.Mesh(
+  new THREE.RingGeometry(1.95, 3.2, 240, 8),
+  new THREE.MeshBasicMaterial({
+    color: 0xffd27a,
+    transparent: true,
+    opacity: 0.16,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    depthTest: true,
+    blending: THREE.AdditiveBlending
+  })
+);
+diskCoreGlow.rotation.x = -Math.PI * 0.5;
+diskCoreGlow.scale.y = 0.16;
+diskCoreGlow.renderOrder = 3;
+diskGroup.add(diskCoreGlow);
 
 const blackHole = new THREE.Mesh(
   new THREE.SphereGeometry(1.62, 128, 128),
   new THREE.MeshBasicMaterial({ color: 0x000000 })
 );
+blackHole.material.depthWrite = true;
+blackHole.material.depthTest = true;
 blackHole.renderOrder = 10;
 blackHoleGroup.add(blackHole);
 
 const photonRing = new THREE.Mesh(
-  new THREE.RingGeometry(1.66, 1.9, 256),
+  new THREE.RingGeometry(1.66, 1.92, 256),
   new THREE.MeshBasicMaterial({
     color: 0xffd07b,
     transparent: true,
@@ -253,7 +289,7 @@ const photonRing = new THREE.Mesh(
   })
 );
 photonRing.rotation.x = -Math.PI * 0.5;
-photonRing.renderOrder = 11;
+photonRing.renderOrder = 12;
 blackHoleGroup.add(photonRing);
 
 const shadowHalo = new THREE.Mesh(
@@ -300,7 +336,7 @@ const lensShellMaterial = new THREE.ShaderMaterial({
       float fresnel = pow(1.0 - max(dot(normalize(vNormal), viewDir), 0.0), 3.5);
       float pulse = 0.95 + sin(uTime * 0.9) * 0.02;
       vec3 color = vec3(0.07, 0.13, 0.28) * fresnel * pulse;
-      float alpha = fresnel * 0.1;
+      float alpha = fresnel * 0.085;
       if (alpha < 0.002) discard;
       gl_FragColor = vec4(color, alpha);
     }
@@ -314,39 +350,64 @@ const lensShell = new THREE.Mesh(
 lensShell.renderOrder = 9;
 blackHoleGroup.add(lensShell);
 
-const topBand = new THREE.Mesh(
-  new THREE.RingGeometry(2.45, 2.8, 220),
-  new THREE.MeshBasicMaterial({
-    color: 0xffddb0,
-    transparent: true,
-    opacity: 0.42,
-    side: THREE.DoubleSide,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending
-  })
-);
-topBand.rotation.x = -Math.PI * 0.5;
-topBand.position.y = 0.78;
-topBand.scale.set(1.15, 0.16, 1.0);
-topBand.renderOrder = 8;
-blackHoleGroup.add(topBand);
+function createLensedArc(color, opacity, y, renderOrder) {
+  const arc = new THREE.Mesh(
+    new THREE.PlaneGeometry(5.0, 1.45),
+    new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      depthTest: true,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      uniforms: {
+        uColor: { value: new THREE.Color(color) },
+        uOpacity: { value: opacity }
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        precision highp float;
+        varying vec2 vUv;
+        uniform vec3 uColor;
+        uniform float uOpacity;
 
-const bottomBand = new THREE.Mesh(
-  new THREE.RingGeometry(2.45, 2.8, 220),
-  new THREE.MeshBasicMaterial({
-    color: 0xffb65a,
-    transparent: true,
-    opacity: 0.22,
-    side: THREE.DoubleSide,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending
-  })
-);
-bottomBand.rotation.x = -Math.PI * 0.5;
-bottomBand.position.y = -0.78;
-bottomBand.scale.set(1.15, 0.14, 1.0);
-bottomBand.renderOrder = 4;
-blackHoleGroup.add(bottomBand);
+        void main() {
+          vec2 p = vUv - 0.5;
+          p.y *= 0.32;
+
+          float curve = exp(-pow(abs(p.x) * 5.0, 2.0));
+          p.y += curve * 0.08;
+
+          float r = length(p) * 2.0;
+          float outer = 1.0 - smoothstep(0.79, 0.87, r);
+          float inner = smoothstep(0.63, 0.71, r);
+          float ring = outer * inner;
+
+          float sideFade = smoothstep(1.0, 0.78, abs(p.x) * 2.0);
+          float alpha = ring * sideFade * uOpacity;
+
+          if (alpha < 0.002) discard;
+          gl_FragColor = vec4(uColor, alpha);
+        }
+      `
+    })
+  );
+
+  arc.position.y = y;
+  arc.renderOrder = renderOrder;
+  return arc;
+}
+
+const topArc = createLensedArc(0xffddb0, 0.42, 0.78, 9);
+blackHoleGroup.add(topArc);
+
+const bottomArc = createLensedArc(0xffb65a, 0.22, -0.78, 5);
+blackHoleGroup.add(bottomArc);
 
 const outerGlow = new THREE.Mesh(
   new THREE.RingGeometry(2.1, 3.5, 220),
@@ -356,12 +417,13 @@ const outerGlow = new THREE.Mesh(
     opacity: 0.08,
     side: THREE.DoubleSide,
     depthWrite: false,
+    depthTest: true,
     blending: THREE.AdditiveBlending
   })
 );
 outerGlow.rotation.x = -Math.PI * 0.5;
 outerGlow.scale.set(1.0, 0.18, 1.0);
-outerGlow.renderOrder = 3;
+outerGlow.renderOrder = 4;
 blackHoleGroup.add(outerGlow);
 
 const composer = new EffectComposer(renderer);
@@ -419,9 +481,9 @@ composer.addPass(distortionPass);
 
 const bloomPass = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
-  0.42,
-  0.45,
-  0.58
+  0.46,
+  0.48,
+  0.56
 );
 composer.addPass(bloomPass);
 
@@ -455,13 +517,16 @@ function animate() {
   lensShellMaterial.uniforms.uTime.value = t;
 
   photonRing.material.opacity = 0.76 + Math.sin(t * 1.4) * 0.015;
-  topBand.material.opacity = 0.4 + Math.sin(t * 1.1) * 0.015;
-  bottomBand.material.opacity = 0.21 + Math.sin(t * 0.95 + 0.25) * 0.01;
-  outerGlow.material.opacity = 0.07 + Math.sin(t * 0.8) * 0.008;
+  outerGlow.material.opacity = 0.075 + Math.sin(t * 0.8) * 0.008;
 
   stars.rotation.y += 0.00004;
-  disk.rotation.z += 0.0018;
-  diskGlow.rotation.z -= 0.0008;
+  backDisk.rotation.z += 0.0012;
+  frontDisk.rotation.z += 0.0012;
+  diskGlow.rotation.z -= 0.0006;
+  diskCoreGlow.rotation.z += 0.0008;
+
+  topArc.lookAt(camera.position);
+  bottomArc.lookAt(camera.position);
 
   screenCenter.set(0, 0, 0);
   projectedCenter.copy(screenCenter).project(camera);
