@@ -1,7 +1,7 @@
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.179.1/build/three.module.js';
-import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.179.1/examples/jsm/controls/OrbitControls.js';
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
 
-const vertexShader = /* glsl */ `
+const vertexShader = `
 varying vec2 vUv;
 
 void main() {
@@ -10,7 +10,7 @@ void main() {
 }
 `;
 
-const fragmentShader = /* glsl */ `
+const fragmentShader = `
 precision highp float;
 
 varying vec2 vUv;
@@ -24,13 +24,21 @@ uniform vec3 uCameraUp;
 uniform float uFov;
 uniform float uAspect;
 
+const float PI = 3.141592653589793;
 const int MAX_STEPS = 96;
 const float FAR_DIST = 140.0;
-const float HORIZON_RADIUS = 1.12;
-const float DISK_INNER_RADIUS = 1.55;
+const float HORIZON_RADIUS = 1.15;
+const float DISK_INNER_RADIUS = 1.65;
 const float DISK_OUTER_RADIUS = 5.8;
 const float STEP_SIZE = 0.18;
 const float BEND_STRENGTH = 0.12;
+
+float hash11(float p) {
+  p = fract(p * 0.1031);
+  p *= p + 33.33;
+  p *= p + p;
+  return fract(p);
+}
 
 float hash31(vec3 p3) {
   p3 = fract(p3 * 0.1031);
@@ -45,15 +53,15 @@ mat2 rot(float a) {
 }
 
 vec3 temperatureColor(float t) {
-  vec3 cool = vec3(1.0, 0.46, 0.12);
-  vec3 warm = vec3(1.0, 0.78, 0.38);
-  vec3 hot = vec3(1.15, 1.28, 1.55);
+  vec3 cool = vec3(1.0, 0.42, 0.08);
+  vec3 warm = vec3(1.0, 0.72, 0.30);
+  vec3 hot  = vec3(1.15, 1.28, 1.55);
   vec3 base = mix(cool, warm, smoothstep(0.0, 0.55, t));
   return mix(base, hot, smoothstep(0.55, 1.0, t));
 }
 
 float starField(vec3 rd) {
-  vec3 p = normalize(rd) * 220.0;
+  vec3 p = normalize(rd) * 240.0;
   vec3 cell = floor(p);
   float sparkle = 0.0;
 
@@ -63,11 +71,11 @@ float starField(vec3 rd) {
         vec3 offset = vec3(float(x), float(y), float(z));
         vec3 c = cell + offset;
         float h = hash31(c);
-        if (h > 0.986) {
+        if (h > 0.985) {
           vec3 starPos = c + vec3(hash31(c + 1.1), hash31(c + 2.7), hash31(c + 7.2));
           vec3 local = p - starPos;
           float d = dot(local, local);
-          float intensity = smoothstep(0.08, 0.0, d) * mix(0.4, 2.2, hash31(c + 9.3));
+          float intensity = smoothstep(0.12, 0.0, d) * mix(0.35, 1.8, hash31(c + 9.3));
           sparkle += intensity;
         }
       }
@@ -79,41 +87,46 @@ float starField(vec3 rd) {
 
 vec3 backgroundColor(vec3 rd) {
   vec3 dir = normalize(rd);
+
   float stars = starField(dir);
 
-  float nebulaBand = pow(max(0.0, 1.0 - abs(dir.y * 1.35)), 6.0);
+  float band = pow(max(0.0, 1.0 - abs(dir.y * 1.2)), 7.0);
   float angle = atan(dir.z, dir.x);
-  float swirl = sin(angle * 4.0 + uTime * 0.02) * 0.5 + 0.5;
-  float dust = smoothstep(0.42, 0.95, nebulaBand * swirl);
+  float swirl = sin(angle * 5.0 + uTime * 0.03) * 0.5 + 0.5;
+  float nebula = smoothstep(0.35, 0.95, band * swirl);
 
-  vec3 deep = vec3(0.004, 0.007, 0.016);
-  vec3 milky = vec3(0.08, 0.11, 0.18) * dust * 0.45;
-  vec3 starColor = vec3(0.95, 0.98, 1.0) * stars;
+  vec3 deep = vec3(0.003, 0.006, 0.015);
+  vec3 milky = vec3(0.06, 0.10, 0.17) * nebula * 0.55;
+  vec3 starColor = vec3(0.92, 0.96, 1.0) * stars;
 
   return deep + milky + starColor;
 }
 
 float diskNoise(vec2 p) {
   vec2 q = p;
-  q *= rot(0.4);
-  float n = sin(q.x * 14.0 + uTime * 0.28) * sin(q.y * 7.0 - uTime * 0.18);
-  n += sin(q.x * 28.0 - uTime * 0.15) * 0.5;
-  n += cos(q.y * 19.0 + uTime * 0.21) * 0.35;
+  q *= rot(0.45);
+
+  float n = sin(q.x * 14.0 + uTime * 0.30) * sin(q.y * 7.5 - uTime * 0.20);
+  n += sin(q.x * 25.0 - uTime * 0.15) * 0.5;
+  n += cos(q.y * 18.0 + uTime * 0.22) * 0.35;
+
   return n * 0.5 + 0.5;
 }
 
 float diskDensity(vec3 p) {
   float r = length(p.xz);
-  float radialMask = smoothstep(DISK_OUTER_RADIUS, DISK_OUTER_RADIUS - 0.75, r)
-                   * smoothstep(DISK_INNER_RADIUS, DISK_INNER_RADIUS + 0.25, r);
 
-  float thickness = mix(0.025, 0.18, smoothstep(DISK_INNER_RADIUS, DISK_OUTER_RADIUS, r));
+  float radialMask =
+      smoothstep(DISK_OUTER_RADIUS, DISK_OUTER_RADIUS - 0.8, r) *
+      smoothstep(DISK_INNER_RADIUS, DISK_INNER_RADIUS + 0.3, r);
+
+  float thickness = mix(0.03, 0.20, smoothstep(DISK_INNER_RADIUS, DISK_OUTER_RADIUS, r));
   float vertical = exp(-abs(p.y) / max(thickness, 0.001));
 
   float theta = atan(p.z, p.x);
-  vec2 uv = vec2(theta * 0.8, r * 1.65);
+  vec2 uv = vec2(theta * 0.85, r * 1.7);
   float turbulence = diskNoise(uv);
-  float filaments = sin(theta * 18.0 + r * 8.0 - uTime * 0.6) * 0.5 + 0.5;
+  float filaments = sin(theta * 18.0 + r * 8.0 - uTime * 0.7) * 0.5 + 0.5;
   float breakup = mix(0.65, 1.35, turbulence * filaments);
 
   return radialMask * vertical * breakup;
@@ -121,17 +134,19 @@ float diskDensity(vec3 p) {
 
 vec3 diskEmission(vec3 p, vec3 dir) {
   float r = length(p.xz);
+
   float heat = 1.0 - smoothstep(DISK_INNER_RADIUS, DISK_OUTER_RADIUS, r);
   heat = pow(heat, 0.65);
 
-  vec3 tangent = normalize(vec3(-p.z, 0.0, p.x) + 1e-5);
-  float orbitSpeed = mix(0.35, 0.94, 1.0 - smoothstep(DISK_INNER_RADIUS, DISK_OUTER_RADIUS, r));
+  vec3 tangent = normalize(vec3(-p.z, 0.0, p.x) + vec3(1e-5));
+  float orbitSpeed = mix(0.35, 0.95, 1.0 - smoothstep(DISK_INNER_RADIUS, DISK_OUTER_RADIUS, r));
   float doppler = dot(tangent, -normalize(dir));
-  float boosted = 1.0 + doppler * orbitSpeed * 1.25;
+  float boosted = 1.0 + doppler * orbitSpeed * 1.2;
   float shifted = clamp(heat * 0.7 + boosted * 0.25, 0.0, 1.0);
 
   vec3 color = temperatureColor(shifted);
-  float brightness = mix(0.28, 3.2, heat) * boosted;
+  float brightness = mix(0.3, 3.4, heat) * boosted;
+
   return color * brightness;
 }
 
@@ -140,9 +155,13 @@ vec3 getRayDirection(vec2 uv) {
   vec2 screen = uv * 2.0 - 1.0;
   screen.x *= uAspect;
 
-  return normalize(
-    uCameraForward + screen.x * tanHalfFov * uCameraRight + screen.y * tanHalfFov * uCameraUp
+  vec3 rd = normalize(
+    uCameraForward +
+    screen.x * tanHalfFov * uCameraRight +
+    screen.y * tanHalfFov * uCameraUp
   );
+
+  return rd;
 }
 
 void main() {
@@ -169,28 +188,29 @@ void main() {
     }
 
     vec3 gravityDir = -position / (r + 1e-5);
-    float bend = BEND_STRENGTH / (r * r + 0.22);
+    float bend = BEND_STRENGTH / (r * r + 0.25);
     direction = normalize(direction + gravityDir * bend);
     position += direction * STEP_SIZE;
 
     float density = diskDensity(position);
     if (density > 0.001) {
       vec3 emission = diskEmission(position, direction);
-      float alpha = clamp(density * 0.055, 0.0, 0.24);
+      float alpha = clamp(density * 0.06, 0.0, 0.24);
       accum += emission * alpha * transmittance;
       transmittance *= (1.0 - alpha * 0.9);
     }
   }
 
   vec3 bg = backgroundColor(direction);
+
   float closestApproach = length(cross(ro, rd));
-  float ring = smoothstep(1.9, 1.1, closestApproach) * smoothstep(0.35, 0.95, transmittance + 0.15);
-  vec3 photonRing = vec3(1.0, 0.72, 0.35) * ring * 1.8;
+  float ring = smoothstep(2.0, 1.15, closestApproach) * smoothstep(0.25, 1.0, transmittance + 0.18);
+  vec3 photonRing = vec3(1.0, 0.72, 0.35) * ring * 2.0;
 
   vec3 color = accum + bg * transmittance + photonRing;
   color *= (1.0 - swallowed);
 
-  float vignette = 1.0 - dot(vUv - 0.5, vUv - 0.5) * 0.9;
+  float vignette = 1.0 - dot(vUv - 0.5, vUv - 0.5) * 0.95;
   color *= vignette;
 
   color = color / (vec3(1.0) + color);
@@ -200,16 +220,25 @@ void main() {
 }
 `;
 
-const app = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({
+  antialias: true,
+  alpha: false,
+  powerPreference: 'high-performance'
+});
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-app.appendChild(renderer.domElement);
+document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200);
+
+const camera = new THREE.PerspectiveCamera(
+  55,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  200
+);
 camera.position.set(0, 2.8, 12);
 
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -221,8 +250,8 @@ controls.zoomSpeed = 0.95;
 controls.enablePan = false;
 controls.minDistance = 4.5;
 controls.maxDistance = 30;
-controls.minPolarAngle = 0.1;
-controls.maxPolarAngle = Math.PI - 0.1;
+controls.minPolarAngle = 0.08;
+controls.maxPolarAngle = Math.PI - 0.08;
 
 const uniforms = {
   uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
@@ -247,12 +276,14 @@ const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
 scene.add(quad);
 
 const clock = new THREE.Clock();
+
 const forward = new THREE.Vector3();
 const right = new THREE.Vector3();
 const up = new THREE.Vector3();
 
 function updateCameraUniforms() {
-  camera.updateMatrixWorld();
+  camera.updateMatrixWorld(true);
+
   camera.getWorldDirection(forward).normalize();
   right.setFromMatrixColumn(camera.matrixWorld, 0).normalize();
   up.setFromMatrixColumn(camera.matrixWorld, 1).normalize();
@@ -265,24 +296,35 @@ function updateCameraUniforms() {
   uniforms.uAspect.value = camera.aspect;
 }
 
-function onResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+function resize() {
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+
+  renderer.setSize(width, height);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+
+  camera.aspect = width / height;
+  camera.updateProjectionMatrix();
+
+  uniforms.uResolution.value.set(width, height);
   uniforms.uAspect.value = camera.aspect;
 }
 
-window.addEventListener('resize', onResize);
+window.addEventListener('resize', resize);
 
 function animate() {
   requestAnimationFrame(animate);
+
   controls.update();
   updateCameraUniforms();
+
   uniforms.uTime.value = clock.getElapsedTime();
+
   renderer.render(scene, camera);
 }
 
+resize();
 updateCameraUniforms();
 animate();
+
+console.log('Black hole renderer loaded.');
