@@ -94,14 +94,42 @@ const photonRing = new THREE.Mesh(
 photonRing.rotation.x = Math.PI * 0.5;
 group.add(photonRing);
 
+const lensMaterial = new THREE.ShaderMaterial({
+  transparent: true,
+  side: THREE.DoubleSide,
+  depthWrite: false,
+  uniforms: {
+    uTime: { value: 0 }
+  },
+  vertexShader: `
+    varying vec3 vNormal;
+    varying vec3 vWorldPosition;
+
+    void main() {
+      vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+      vWorldPosition = worldPosition.xyz;
+      vNormal = normalize(normalMatrix * normal);
+      gl_Position = projectionMatrix * viewMatrix * worldPosition;
+    }
+  `,
+  fragmentShader: `
+    precision highp float;
+
+    varying vec3 vNormal;
+    varying vec3 vWorldPosition;
+
+    void main() {
+      vec3 viewDir = normalize(cameraPosition - vWorldPosition);
+      float fresnel = pow(1.0 - max(dot(normalize(vNormal), viewDir), 0.0), 3.0);
+      vec3 color = vec3(0.2, 0.4, 0.9) * fresnel;
+      gl_FragColor = vec4(color, fresnel * 0.25);
+    }
+  `
+});
+
 const lensShell = new THREE.Mesh(
-  new THREE.SphereGeometry(2.9, 64, 64),
-  new THREE.MeshBasicMaterial({
-    color: 0x2d4f88,
-    transparent: true,
-    opacity: 0.08,
-    side: THREE.DoubleSide
-  })
+  new THREE.SphereGeometry(2.9, 128, 128),
+  lensMaterial
 );
 group.add(lensShell);
 
@@ -176,6 +204,7 @@ function resize() {
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   renderer.setSize(w, h);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 }
 
 window.addEventListener('resize', resize);
@@ -190,7 +219,7 @@ function animate() {
   disk.rotation.z += 0.01;
   diskOuterGlow.rotation.z -= 0.004;
   photonRing.material.opacity = 0.82 + Math.sin(t * 2.0) * 0.08;
-  lensShell.material.opacity = 0.06 + Math.sin(t * 1.4) * 0.015;
+  lensMaterial.uniforms.uTime.value = t;
 
   group.rotation.y += 0.002;
   stars.rotation.y += 0.00015;
