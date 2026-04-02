@@ -17,7 +17,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.86;
+renderer.toneMappingExposure = 0.9;
 renderer.setClearColor(0x000000, 1);
 app.appendChild(renderer.domElement);
 
@@ -46,7 +46,7 @@ controls.maxPolarAngle = Math.PI - 0.12;
 const ambient = new THREE.AmbientLight(0xffffff, 0.04);
 scene.add(ambient);
 
-const warmLight = new THREE.PointLight(0xff8d3a, 5.2, 35, 2);
+const warmLight = new THREE.PointLight(0xff8d3a, 5.5, 35, 2);
 warmLight.position.set(0, 0, 0);
 scene.add(warmLight);
 
@@ -102,7 +102,6 @@ function createStars(count = 7000, radius = 220) {
     transparent: true,
     depthWrite: false,
     vertexColors: true,
-    uniforms: {},
     vertexShader: `
       attribute float aSize;
       varying vec3 vColor;
@@ -140,250 +139,100 @@ const dustShell = new THREE.Mesh(
   new THREE.MeshBasicMaterial({
     color: 0x06080d,
     transparent: true,
-    opacity: 0.025,
+    opacity: 0.02,
     side: THREE.BackSide
   })
 );
 scene.add(dustShell);
 
-const diskVertexShader = `
-  varying vec2 vUv;
+function createAccretionTexture(size = 1024) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
 
-  void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  ctx.clearRect(0, 0, size, size);
+
+  const cx = size / 2;
+  const cy = size / 2;
+  const inner = size * 0.23;
+  const outer = size * 0.47;
+
+  const grad = ctx.createRadialGradient(cx, cy, inner, cx, cy, outer);
+  grad.addColorStop(0.0, 'rgba(255,245,210,0.0)');
+  grad.addColorStop(0.08, 'rgba(255,245,210,0.85)');
+  grad.addColorStop(0.24, 'rgba(255,190,90,0.95)');
+  grad.addColorStop(0.52, 'rgba(255,120,30,0.55)');
+  grad.addColorStop(0.82, 'rgba(120,40,10,0.18)');
+  grad.addColorStop(1.0, 'rgba(0,0,0,0.0)');
+
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, outer, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.beginPath();
+  ctx.arc(cx, cy, inner, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.globalCompositeOperation = 'source-over';
+
+  for (let i = 0; i < 1600; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = inner + Math.random() * (outer - inner);
+    const x = cx + Math.cos(angle + radius * 0.015) * radius;
+    const y = cy + Math.sin(angle + radius * 0.015) * radius;
+
+    const alpha = 0.015 + Math.random() * 0.08;
+    const dotSize = 0.5 + Math.random() * 2.2;
+    const hue = 26 + Math.random() * 18;
+    const light = 45 + Math.random() * 30;
+
+    ctx.fillStyle = `hsla(${hue}, 100%, ${light}%, ${alpha})`;
+    ctx.beginPath();
+    ctx.arc(x, y, dotSize, 0, Math.PI * 2);
+    ctx.fill();
   }
-`;
 
-const diskFragmentShader = `
-  precision highp float;
-
-  varying vec2 vUv;
-
-  uniform float uTime;
-  uniform float uInnerRadius;
-  uniform float uOuterRadius;
-  uniform float uOpacity;
-  uniform float uBrightness;
-  uniform float uVerticalScale;
-  uniform vec3 uHotColor;
-  uniform vec3 uWarmColor;
-  uniform vec3 uCoolColor;
-
-  float ringMask(float r, float innerR, float outerR, float blur) {
-    float inner = smoothstep(innerR, innerR + blur, r);
-    float outer = 1.0 - smoothstep(outerR - blur, outerR, r);
-    return inner * outer;
-  }
-
-  void main() {
-    vec2 p = vUv - 0.5;
-    p.y *= uVerticalScale;
-
-    float r = length(p) * 2.0;
-    float a = atan(p.y, p.x);
-
-    float mask = ringMask(r, uInnerRadius, uOuterRadius, 0.035);
-
-    float streaks =
-      sin(a * 20.0 + r * 18.0 - uTime * 1.7) * 0.16 +
-      sin(a * 44.0 - r * 12.0 - uTime * 1.1) * 0.08 +
-      cos(a * 9.0 + r * 6.0 + uTime * 0.6) * 0.05;
-
-    float turbulence =
-      sin((p.x + p.y) * 18.0 + uTime * 0.5) * 0.04 +
-      cos((p.x - p.y) * 13.0 - uTime * 0.7) * 0.04;
-
-    float pattern = clamp(0.84 + streaks + turbulence, 0.0, 1.2);
-
-    float hot = 1.0 - smoothstep(uInnerRadius, uInnerRadius + 0.08, r);
-    float warm = 1.0 - smoothstep(uInnerRadius + 0.04, uOuterRadius - 0.02, r);
-    float outer = smoothstep(uInnerRadius + 0.03, uOuterRadius, r);
-
-    vec3 color = mix(uCoolColor, uWarmColor, clamp(warm, 0.0, 1.0));
-    color = mix(color, uHotColor, clamp(hot, 0.0, 1.0));
-    color *= mix(0.86, 1.12, pattern);
-    color *= mix(0.9, 1.06, outer);
-    color *= uBrightness;
-
-    float edgeFade = 1.0 - smoothstep(0.74, 0.94, r);
-    float alpha = mask * pattern * uOpacity * edgeFade;
-
-    if (alpha < 0.002) discard;
-    gl_FragColor = vec4(color, alpha);
-  }
-`;
-
-const lensedBandVertexShader = `
-  varying vec2 vUv;
-
-  void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
-
-const lensedBandFragmentShader = `
-  precision highp float;
-
-  varying vec2 vUv;
-
-  uniform vec3 uColor;
-  uniform float uOpacity;
-  uniform float uRadius;
-  uniform float uThickness;
-  uniform float uVerticalScale;
-  uniform float uSoftness;
-  uniform float uCenterPinch;
-  uniform float uTime;
-
-  void main() {
-    vec2 p = vUv - 0.5;
-    p.y *= uVerticalScale;
-
-    float centerCurve = exp(-pow(abs(p.x) * uCenterPinch, 2.0));
-    p.y += centerCurve * 0.08;
-
-    float r = length(p) * 2.0;
-
-    float outer = 1.0 - smoothstep(uRadius + uThickness, uRadius + uThickness + uSoftness, r);
-    float inner = smoothstep(uRadius - uThickness - uSoftness, uRadius - uThickness, r);
-    float ring = outer * inner;
-
-    float sideFade = smoothstep(1.02, 0.8, abs(p.x) * 2.0);
-    float shimmer = 0.97 + sin(abs(p.x) * 10.0 - uTime * 1.1) * 0.02;
-    float alpha = ring * sideFade * uOpacity * shimmer;
-
-    if (alpha < 0.002) discard;
-    gl_FragColor = vec4(uColor, alpha);
-  }
-`;
-
-const lensVertexShader = `
-  varying vec3 vNormal;
-  varying vec3 vWorldPosition;
-
-  void main() {
-    vec4 worldPosition = modelMatrix * vec4(position, 1.0);
-    vWorldPosition = worldPosition.xyz;
-    vNormal = normalize(normalMatrix * normal);
-    gl_Position = projectionMatrix * viewMatrix * worldPosition;
-  }
-`;
-
-const lensFragmentShader = `
-  precision highp float;
-
-  varying vec3 vNormal;
-  varying vec3 vWorldPosition;
-  uniform float uTime;
-
-  void main() {
-    vec3 viewDir = normalize(cameraPosition - vWorldPosition);
-    float fresnel = pow(1.0 - max(dot(normalize(vNormal), viewDir), 0.0), 3.5);
-    float pulse = 0.95 + sin(uTime * 0.9) * 0.02;
-    vec3 color = vec3(0.07, 0.13, 0.28) * fresnel * pulse;
-    float alpha = fresnel * 0.1;
-    if (alpha < 0.002) discard;
-    gl_FragColor = vec4(color, alpha);
-  }
-`;
-
-function createDiskMaterial({
-  innerRadius,
-  outerRadius,
-  opacity,
-  brightness,
-  verticalScale,
-  hotColor,
-  warmColor,
-  coolColor
-}) {
-  return new THREE.ShaderMaterial({
-    transparent: true,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-    blending: THREE.AdditiveBlending,
-    vertexShader: diskVertexShader,
-    fragmentShader: diskFragmentShader,
-    uniforms: {
-      uTime: { value: 0 },
-      uInnerRadius: { value: innerRadius },
-      uOuterRadius: { value: outerRadius },
-      uOpacity: { value: opacity },
-      uBrightness: { value: brightness },
-      uVerticalScale: { value: verticalScale },
-      uHotColor: { value: new THREE.Color(hotColor) },
-      uWarmColor: { value: new THREE.Color(warmColor) },
-      uCoolColor: { value: new THREE.Color(coolColor) }
-    }
-  });
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
 }
 
-function createLensedBandMaterial({
-  color,
-  opacity,
-  radius,
-  thickness,
-  verticalScale,
-  softness,
-  centerPinch
-}) {
-  return new THREE.ShaderMaterial({
-    transparent: true,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-    blending: THREE.AdditiveBlending,
-    vertexShader: lensedBandVertexShader,
-    fragmentShader: lensedBandFragmentShader,
-    uniforms: {
-      uColor: { value: new THREE.Color(color) },
-      uOpacity: { value: opacity },
-      uRadius: { value: radius },
-      uThickness: { value: thickness },
-      uVerticalScale: { value: verticalScale },
-      uSoftness: { value: softness },
-      uCenterPinch: { value: centerPinch },
-      uTime: { value: 0 }
-    }
-  });
-}
+const accretionTexture = createAccretionTexture();
 
-const diskPlane = new THREE.PlaneGeometry(10, 10);
-
-const mainDiskMaterial = createDiskMaterial({
-  innerRadius: 0.2,
-  outerRadius: 0.62,
-  opacity: 0.7,
-  brightness: 0.62,
-  verticalScale: 0.08,
-  hotColor: 0xffefbf,
-  warmColor: 0xff9730,
-  coolColor: 0x220b03
+const diskGeometry = new THREE.RingGeometry(2.0, 6.0, 256, 32);
+const diskMaterial = new THREE.MeshBasicMaterial({
+  map: accretionTexture,
+  transparent: true,
+  side: THREE.DoubleSide,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending
 });
 
-const glowDiskMaterial = createDiskMaterial({
-  innerRadius: 0.16,
-  outerRadius: 0.72,
-  opacity: 0.14,
-  brightness: 0.72,
-  verticalScale: 0.08,
-  hotColor: 0xffe5c0,
-  warmColor: 0xffb55a,
-  coolColor: 0x2d1005
+const disk = new THREE.Mesh(diskGeometry, diskMaterial);
+disk.rotation.x = -Math.PI * 0.5;
+disk.scale.y = 0.09;
+disk.renderOrder = 2;
+diskGroup.add(disk);
+
+const diskGlowGeometry = new THREE.RingGeometry(1.8, 6.8, 256, 16);
+const diskGlowMaterial = new THREE.MeshBasicMaterial({
+  color: 0xffa347,
+  transparent: true,
+  opacity: 0.12,
+  side: THREE.DoubleSide,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending
 });
 
-const mainDisk = new THREE.Mesh(diskPlane, mainDiskMaterial);
-mainDisk.rotation.x = -Math.PI * 0.5;
-mainDisk.renderOrder = 2;
-diskGroup.add(mainDisk);
-
-const glowDisk = new THREE.Mesh(diskPlane, glowDiskMaterial);
-glowDisk.rotation.x = -Math.PI * 0.5;
-glowDisk.position.y = -0.015;
-glowDisk.scale.set(1.03, 1.03, 1.03);
-glowDisk.renderOrder = 1;
-diskGroup.add(glowDisk);
+const diskGlow = new THREE.Mesh(diskGlowGeometry, diskGlowMaterial);
+diskGlow.rotation.x = -Math.PI * 0.5;
+diskGlow.scale.y = 0.11;
+diskGlow.renderOrder = 1;
+diskGroup.add(diskGlow);
 
 const blackHole = new THREE.Mesh(
   new THREE.SphereGeometry(1.62, 128, 128),
@@ -393,13 +242,14 @@ blackHole.renderOrder = 10;
 blackHoleGroup.add(blackHole);
 
 const photonRing = new THREE.Mesh(
-  new THREE.RingGeometry(1.66, 1.88, 256),
+  new THREE.RingGeometry(1.66, 1.9, 256),
   new THREE.MeshBasicMaterial({
     color: 0xffd07b,
     transparent: true,
-    opacity: 0.72,
+    opacity: 0.78,
     side: THREE.DoubleSide,
-    depthWrite: false
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
   })
 );
 photonRing.rotation.x = -Math.PI * 0.5;
@@ -407,11 +257,11 @@ photonRing.renderOrder = 11;
 blackHoleGroup.add(photonRing);
 
 const shadowHalo = new THREE.Mesh(
-  new THREE.RingGeometry(1.7, 2.35, 256),
+  new THREE.RingGeometry(1.72, 2.35, 256),
   new THREE.MeshBasicMaterial({
     color: 0x120702,
     transparent: true,
-    opacity: 0.18,
+    opacity: 0.16,
     side: THREE.DoubleSide,
     depthWrite: false
   })
@@ -424,11 +274,37 @@ const lensShellMaterial = new THREE.ShaderMaterial({
   transparent: true,
   depthWrite: false,
   side: THREE.DoubleSide,
-  vertexShader: lensVertexShader,
-  fragmentShader: lensFragmentShader,
   uniforms: {
     uTime: { value: 0 }
-  }
+  },
+  vertexShader: `
+    varying vec3 vNormal;
+    varying vec3 vWorldPosition;
+
+    void main() {
+      vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+      vWorldPosition = worldPosition.xyz;
+      vNormal = normalize(normalMatrix * normal);
+      gl_Position = projectionMatrix * viewMatrix * worldPosition;
+    }
+  `,
+  fragmentShader: `
+    precision highp float;
+
+    varying vec3 vNormal;
+    varying vec3 vWorldPosition;
+    uniform float uTime;
+
+    void main() {
+      vec3 viewDir = normalize(cameraPosition - vWorldPosition);
+      float fresnel = pow(1.0 - max(dot(normalize(vNormal), viewDir), 0.0), 3.5);
+      float pulse = 0.95 + sin(uTime * 0.9) * 0.02;
+      vec3 color = vec3(0.07, 0.13, 0.28) * fresnel * pulse;
+      float alpha = fresnel * 0.1;
+      if (alpha < 0.002) discard;
+      gl_FragColor = vec4(color, alpha);
+    }
+  `
 });
 
 const lensShell = new THREE.Mesh(
@@ -438,39 +314,55 @@ const lensShell = new THREE.Mesh(
 lensShell.renderOrder = 9;
 blackHoleGroup.add(lensShell);
 
-const lensedBandGeometry = new THREE.PlaneGeometry(5.3, 1.5);
-
-const topBandMaterial = createLensedBandMaterial({
-  color: 0xffddb0,
-  opacity: 0.46,
-  radius: 0.61,
-  thickness: 0.022,
-  verticalScale: 0.36,
-  softness: 0.055,
-  centerPinch: 5.5
-});
-
-const bottomBandMaterial = createLensedBandMaterial({
-  color: 0xffb65a,
-  opacity: 0.24,
-  radius: 0.61,
-  thickness: 0.02,
-  verticalScale: 0.36,
-  softness: 0.055,
-  centerPinch: 5.5
-});
-
-const topBand = new THREE.Mesh(lensedBandGeometry, topBandMaterial);
+const topBand = new THREE.Mesh(
+  new THREE.RingGeometry(2.45, 2.8, 220),
+  new THREE.MeshBasicMaterial({
+    color: 0xffddb0,
+    transparent: true,
+    opacity: 0.42,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  })
+);
+topBand.rotation.x = -Math.PI * 0.5;
 topBand.position.y = 0.78;
-topBand.scale.set(1.0, 0.82, 1.0);
+topBand.scale.set(1.15, 0.16, 1.0);
 topBand.renderOrder = 8;
 blackHoleGroup.add(topBand);
 
-const bottomBand = new THREE.Mesh(lensedBandGeometry, bottomBandMaterial);
+const bottomBand = new THREE.Mesh(
+  new THREE.RingGeometry(2.45, 2.8, 220),
+  new THREE.MeshBasicMaterial({
+    color: 0xffb65a,
+    transparent: true,
+    opacity: 0.22,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  })
+);
+bottomBand.rotation.x = -Math.PI * 0.5;
 bottomBand.position.y = -0.78;
-bottomBand.scale.set(1.0, 0.75, 1.0);
+bottomBand.scale.set(1.15, 0.14, 1.0);
 bottomBand.renderOrder = 4;
 blackHoleGroup.add(bottomBand);
+
+const outerGlow = new THREE.Mesh(
+  new THREE.RingGeometry(2.1, 3.5, 220),
+  new THREE.MeshBasicMaterial({
+    color: 0xff9a36,
+    transparent: true,
+    opacity: 0.08,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  })
+);
+outerGlow.rotation.x = -Math.PI * 0.5;
+outerGlow.scale.set(1.0, 0.18, 1.0);
+outerGlow.renderOrder = 3;
+blackHoleGroup.add(outerGlow);
 
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
@@ -480,7 +372,7 @@ const distortionPass = new ShaderPass({
     tDiffuse: { value: null },
     uCenter: { value: new THREE.Vector2(0.5, 0.5) },
     uAspect: { value: window.innerWidth / window.innerHeight },
-    uStrength: { value: 0.022 },
+    uStrength: { value: 0.02 },
     uRadius: { value: 0.115 },
     uInnerRadius: { value: 0.03 }
   },
@@ -527,9 +419,9 @@ composer.addPass(distortionPass);
 
 const bloomPass = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
-  0.32,
-  0.4,
-  0.55
+  0.42,
+  0.45,
+  0.58
 );
 composer.addPass(bloomPass);
 
@@ -560,20 +452,16 @@ function animate() {
 
   controls.update();
 
-  mainDiskMaterial.uniforms.uTime.value = t;
-  glowDiskMaterial.uniforms.uTime.value = t * 0.85;
   lensShellMaterial.uniforms.uTime.value = t;
-  topBandMaterial.uniforms.uTime.value = t;
-  bottomBandMaterial.uniforms.uTime.value = t;
 
-  photonRing.material.opacity = 0.7 + Math.sin(t * 1.4) * 0.015;
-  topBandMaterial.uniforms.uOpacity.value = 0.44 + Math.sin(t * 1.1) * 0.015;
-  bottomBandMaterial.uniforms.uOpacity.value = 0.23 + Math.sin(t * 0.95 + 0.25) * 0.012;
-
-  topBand.lookAt(camera.position);
-  bottomBand.lookAt(camera.position);
+  photonRing.material.opacity = 0.76 + Math.sin(t * 1.4) * 0.015;
+  topBand.material.opacity = 0.4 + Math.sin(t * 1.1) * 0.015;
+  bottomBand.material.opacity = 0.21 + Math.sin(t * 0.95 + 0.25) * 0.01;
+  outerGlow.material.opacity = 0.07 + Math.sin(t * 0.8) * 0.008;
 
   stars.rotation.y += 0.00004;
+  disk.rotation.z += 0.0018;
+  diskGlow.rotation.z -= 0.0008;
 
   screenCenter.set(0, 0, 0);
   projectedCenter.copy(screenCenter).project(camera);
