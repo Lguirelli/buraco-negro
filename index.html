@@ -1,16 +1,27 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gargantua Cinematic Black Hole</title>
+    <title>Buraco Negro Cinematográfico</title>
     <meta
       name="description"
-      content="A cinematic, simplified black hole inspired by Interstellar, built with Three.js and GLSL."
+      content="Buraco negro cinematográfico inspirado em Interstellar, com câmera livre, clique e arraste para orbitar e scroll para zoom."
     />
+    <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
+    <div class="hud">
+      <div class="hud__title">Buraco Negro Cinematográfico</div>
+      <div class="hud__text">
+        Clique e arraste para orbitar<br />
+        Scroll para zoom<br />
+        O buraco negro permanece no centro
+      </div>
+    </div>
+
     <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
+
+    <script type="module" src="./main.js"></script>
   </body>
 </html>

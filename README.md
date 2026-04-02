@@ -1,154 +1,67 @@
-# Gargantua Cinematic Black Hole
+# Buraco Negro Cinematográfico
 
-A real-time, shader-driven black hole renderer inspired by the visual language of **Interstellar**.
+Projeto estático, pronto para GitHub Pages, que renderiza um buraco negro cinematográfico inspirado em Interstellar.
 
-This project focuses on a practical balance between:
+## O que já faz
 
-- relativistic inspiration
-- cinematic readability
-- GPU-friendly rendering
-- clean open source project structure
+- câmera livre com clique e arraste
+- zoom com scroll
+- órbita suave ao redor do buraco negro
+- disco de acreção emissivo
+- distorção gravitacional aproximada em shader
+- fundo procedural com estrelas
+- compatível com GitHub Pages sem etapa de build
 
-It is **not** a full scientific Kerr black hole simulator. It is a simplified implementation designed to feel convincing, dramatic, and hackable.
-
-## Inspiration
-
-The project is inspired by the black hole **Gargantua** from *Interstellar*, whose look was developed with support from physicist **Kip Thorne** and the visual effects team at **Double Negative**.
-
-The goal here is to translate that idea into a compact project that can run locally in a browser and serve as a strong foundation for future physical fidelity improvements.
-
-## What this project renders
-
-- central black hole shadow
-- gravitational-style ray bending approximation
-- glowing accretion disk
-- brighter relativistic side of the disk
-- top and bottom visual wrap from curved-light approximation
-- photon-ring style glow
-- procedural background stars
-- interactive free orbit camera with mouse drag and scroll zoom
-
-## Technologies
-
-- **Three.js** for scene bootstrapping and camera controls
-- **GLSL shaders** for black hole rendering
-- **Vite** for local development and build tooling
-- **WebGL** for GPU execution
-
-## Why this stack
-
-This stack was chosen because it is:
-
-- easy to run locally
-- lightweight
-- GitHub-friendly
-- ideal for shader experimentation
-- fast enough for real-time iteration
-- simple to extend with UI, post-processing, and physical parameters
-
-## How to run
-
-### 1. Install dependencies
-
-```bash
-npm install
-```
-
-### 2. Start development server
-
-```bash
-npm run dev
-```
-
-### 3. Build production version
-
-```bash
-npm run build
-```
-
-### 4. Preview production build
-
-```bash
-npm run preview
-```
-
-## Camera controls
-
-The camera is interactive and always orbits around the black hole at the center of the scene.
-
-- **Left click + drag**: rotate around the black hole
-- **Mouse wheel / trackpad scroll**: zoom in and out
-- **Target**: locked to the black hole center
-- **Pan**: disabled to preserve composition
-
-This is implemented with `OrbitControls`.
-
-## Project structure
+## Estrutura
 
 ```text
-interstellar-black-hole/
+buraco-negro-pages/
 ├─ index.html
-├─ package.json
-├─ README.md
-└─ src/
-   ├─ main.js
-   ├─ styles.css
-   └─ shaders/
-      ├─ blackHole.vert.glsl
-      └─ blackHole.frag.glsl
+├─ style.css
+├─ main.js
+└─ README.md
 ```
 
-## Implementation notes
+## Como publicar no GitHub Pages
 
-### Rendering model
+1. Crie um repositório
+2. Envie estes arquivos para a raiz do repositório
+3. Vá em **Settings > Pages**
+4. Em **Source**, escolha **Deploy from branch**
+5. Selecione a branch principal e a pasta **/(root)**
+6. Salve
 
-The renderer uses a fullscreen shader. Each pixel launches a view ray from the current camera.
+## Como rodar localmente
 
-Inside the fragment shader:
+Você pode abrir com uma extensão de servidor local, ou usar qualquer servidor simples.
 
-1. a ray direction is created from camera basis vectors
-2. the ray is iteratively bent toward the black hole using a gravity-inspired heuristic
-3. a volumetric accretion disk is sampled during stepping
-4. rays crossing the event-horizon radius are absorbed
-5. surviving rays sample a procedural star field background
-6. a photon-ring style glow is added near strong bending zones
+Exemplo com Python:
 
-### What is physically inspired
+```bash
+python -m http.server 8000
+```
 
-- inward ray bending based on distance to the black hole
-- black hole shadow region
-- thin rotating accretion disk around the equatorial plane
-- Doppler-like asymmetry that brightens one side of the disk
-- stronger emission closer to the inner disk radius
+Depois abra:
 
-### What is artistically approximated
+```text
+http://localhost:8000
+```
 
-- geodesic bending strength
-- event horizon scale in scene units
-- volumetric disk density profile
-- disk turbulence and glow
-- background lensing and photon ring intensity
+## Controles
 
-## Limitations
+- clique e arraste: orbitar a câmera
+- scroll: zoom
+- o alvo da câmera fica travado no centro
 
-This is a simplified cinematic renderer. It does **not** currently include:
+## Stack
 
-- exact Kerr geodesic integration
-- true relativistic redshift equations
-- exact gravitational lensing of a real skybox
-- physically derived accretion disk temperature models
-- post-processing bloom pipeline
-- physically calibrated tone mapping
+- HTML
+- CSS
+- JavaScript
+- Three.js via CDN
+- GLSL inline no arquivo `main.js`
 
-## Next steps
+## Observação
 
-- replace heuristic bending with better null-geodesic approximation
-- add parameter controls for disk thickness, mass, spin, and glow
-- add a physically lensed environment map
-- implement post-processing bloom and chromatic scattering
-- support higher-quality temporal sampling
-- experiment with a spinning black hole frame-dragging approximation
-
-## License suggestion
-
-For GitHub publishing, MIT is a strong default unless you want stricter reuse control.
+Este projeto foi montado para evitar tela branca no GitHub Pages.
+Ele não depende de Vite, npm ou importações locais de shader.
