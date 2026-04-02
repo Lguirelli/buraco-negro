@@ -17,7 +17,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.88;
+renderer.toneMappingExposure = 0.86;
 renderer.setClearColor(0x000000, 1);
 app.appendChild(renderer.domElement);
 
@@ -29,7 +29,7 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   1000
 );
-camera.position.set(0, 1.8, 9.5);
+camera.position.set(0, 1.8, 9.2);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 0, 0);
@@ -46,11 +46,11 @@ controls.maxPolarAngle = Math.PI - 0.12;
 const ambient = new THREE.AmbientLight(0xffffff, 0.04);
 scene.add(ambient);
 
-const warmLight = new THREE.PointLight(0xff8e3b, 5.5, 40, 2);
+const warmLight = new THREE.PointLight(0xff8d3a, 5.2, 35, 2);
 warmLight.position.set(0, 0, 0);
 scene.add(warmLight);
 
-const coolLight = new THREE.PointLight(0x507dff, 0.8, 90, 2);
+const coolLight = new THREE.PointLight(0x507dff, 0.7, 80, 2);
 coolLight.position.set(-10, 7, -8);
 scene.add(coolLight);
 
@@ -62,64 +62,85 @@ scene.add(diskGroup);
 
 const clock = new THREE.Clock();
 
-function createStarTexture(size = 2048) {
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
+function createStars(count = 7000, radius = 220) {
+  const geometry = new THREE.BufferGeometry();
+  const positions = [];
+  const colors = [];
+  const sizes = [];
+  const color = new THREE.Color();
 
-  ctx.fillStyle = '#000000';
-  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < count; i++) {
+    const r = radius * (0.72 + Math.random() * 0.28);
+    const theta = Math.random() * Math.PI * 2.0;
+    const phi = Math.acos(2.0 * Math.random() - 1.0);
 
-  for (let i = 0; i < 6000; i++) {
-    const x = Math.random() * size;
-    const y = Math.random() * size;
+    const x = r * Math.sin(phi) * Math.cos(theta);
+    const y = r * Math.cos(phi);
+    const z = r * Math.sin(phi) * Math.sin(theta);
+
+    positions.push(x, y, z);
+
+    const t = Math.random();
+    color.setRGB(
+      0.78 + t * 0.22,
+      0.79 + t * 0.2,
+      0.88 + t * 0.12
+    );
+    colors.push(color.r, color.g, color.b);
 
     const rare = Math.random();
-    let starSize = 0.2 + Math.random() * 0.9;
-    let alpha = 0.18 + Math.random() * 0.65;
-
-    if (rare > 0.992) {
-      starSize = 1.3 + Math.random() * 1.8;
-      alpha = 0.9;
-    }
-
-    const temp = Math.random();
-    const red = Math.floor(220 + temp * 35);
-    const green = Math.floor(220 + temp * 30);
-    const blue = Math.floor(228 + temp * 22);
-
-    ctx.fillStyle = `rgba(${red}, ${green}, ${blue}, ${alpha})`;
-    ctx.beginPath();
-    ctx.arc(x, y, starSize, 0, Math.PI * 2);
-    ctx.fill();
+    let size = 0.55 + Math.random() * 0.9;
+    if (rare > 0.992) size = 1.5 + Math.random() * 1.2;
+    sizes.push(size);
   }
 
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.ClampToEdgeWrapping;
-  tex.needsUpdate = true;
-  return tex;
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setAttribute('aSize', new THREE.Float32BufferAttribute(sizes, 1));
+
+  const material = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    vertexColors: true,
+    uniforms: {},
+    vertexShader: `
+      attribute float aSize;
+      varying vec3 vColor;
+
+      void main() {
+        vColor = color;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        float scale = 220.0 / max(1.0, -mvPosition.z);
+        gl_PointSize = aSize * scale;
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `,
+    fragmentShader: `
+      precision highp float;
+      varying vec3 vColor;
+
+      void main() {
+        vec2 uv = gl_PointCoord - 0.5;
+        float d = length(uv);
+        if (d > 0.5) discard;
+        float alpha = smoothstep(0.5, 0.0, d);
+        gl_FragColor = vec4(vColor, alpha);
+      }
+    `
+  });
+
+  return new THREE.Points(geometry, material);
 }
 
-const starTexture = createStarTexture();
-
-const starSphere = new THREE.Mesh(
-  new THREE.SphereGeometry(240, 64, 64),
-  new THREE.MeshBasicMaterial({
-    map: starTexture,
-    side: THREE.BackSide
-  })
-);
-scene.add(starSphere);
+const stars = createStars();
+scene.add(stars);
 
 const dustShell = new THREE.Mesh(
-  new THREE.SphereGeometry(150, 32, 32),
+  new THREE.SphereGeometry(150, 24, 24),
   new THREE.MeshBasicMaterial({
-    color: 0x07090d,
+    color: 0x06080d,
     transparent: true,
-    opacity: 0.03,
+    opacity: 0.025,
     side: THREE.BackSide
   })
 );
@@ -185,9 +206,10 @@ const diskFragmentShader = `
     color *= mix(0.9, 1.06, outer);
     color *= uBrightness;
 
-    float edgeFade = 1.0 - smoothstep(0.8, 1.0, r);
+    float edgeFade = 1.0 - smoothstep(0.74, 0.94, r);
     float alpha = mask * pattern * uOpacity * edgeFade;
 
+    if (alpha < 0.002) discard;
     gl_FragColor = vec4(color, alpha);
   }
 `;
@@ -219,7 +241,6 @@ const lensedBandFragmentShader = `
     vec2 p = vUv - 0.5;
     p.y *= uVerticalScale;
 
-    float xNorm = abs(p.x) * 2.0;
     float centerCurve = exp(-pow(abs(p.x) * uCenterPinch, 2.0));
     p.y += centerCurve * 0.08;
 
@@ -229,10 +250,11 @@ const lensedBandFragmentShader = `
     float inner = smoothstep(uRadius - uThickness - uSoftness, uRadius - uThickness, r);
     float ring = outer * inner;
 
-    float sideFade = smoothstep(1.05, 0.82, xNorm);
-    float shimmer = 0.96 + sin(xNorm * 10.0 - uTime * 1.1) * 0.02;
+    float sideFade = smoothstep(1.02, 0.8, abs(p.x) * 2.0);
+    float shimmer = 0.97 + sin(abs(p.x) * 10.0 - uTime * 1.1) * 0.02;
     float alpha = ring * sideFade * uOpacity * shimmer;
 
+    if (alpha < 0.002) discard;
     gl_FragColor = vec4(uColor, alpha);
   }
 `;
@@ -261,7 +283,9 @@ const lensFragmentShader = `
     float fresnel = pow(1.0 - max(dot(normalize(vNormal), viewDir), 0.0), 3.5);
     float pulse = 0.95 + sin(uTime * 0.9) * 0.02;
     vec3 color = vec3(0.07, 0.13, 0.28) * fresnel * pulse;
-    gl_FragColor = vec4(color, fresnel * 0.1);
+    float alpha = fresnel * 0.1;
+    if (alpha < 0.002) discard;
+    gl_FragColor = vec4(color, alpha);
   }
 `;
 
@@ -325,7 +349,7 @@ function createLensedBandMaterial({
   });
 }
 
-const diskPlane = new THREE.PlaneGeometry(16, 16);
+const diskPlane = new THREE.PlaneGeometry(10, 10);
 
 const mainDiskMaterial = createDiskMaterial({
   innerRadius: 0.2,
@@ -414,7 +438,7 @@ const lensShell = new THREE.Mesh(
 lensShell.renderOrder = 9;
 blackHoleGroup.add(lensShell);
 
-const lensedBandGeometry = new THREE.PlaneGeometry(6.4, 1.8);
+const lensedBandGeometry = new THREE.PlaneGeometry(5.3, 1.5);
 
 const topBandMaterial = createLensedBandMaterial({
   color: 0xffddb0,
@@ -549,7 +573,7 @@ function animate() {
   topBand.lookAt(camera.position);
   bottomBand.lookAt(camera.position);
 
-  starSphere.rotation.y += 0.00004;
+  stars.rotation.y += 0.00004;
 
   screenCenter.set(0, 0, 0);
   projectedCenter.copy(screenCenter).project(camera);
