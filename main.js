@@ -48,40 +48,17 @@ const rimLight = new THREE.PointLight(0x66aaff, 2.5, 100);
 rimLight.position.set(-10, 8, -12);
 scene.add(rimLight);
 
-const group = new THREE.Group();
-scene.add(group);
+const blackHoleGroup = new THREE.Group();
+scene.add(blackHoleGroup);
+
+const diskGroup = new THREE.Group();
+scene.add(diskGroup);
 
 const blackHole = new THREE.Mesh(
   new THREE.SphereGeometry(2.1, 96, 96),
   new THREE.MeshBasicMaterial({ color: 0x000000 })
 );
-group.add(blackHole);
-
-const disk = new THREE.Mesh(
-  new THREE.TorusGeometry(4.2, 1.15, 48, 220),
-  new THREE.MeshStandardMaterial({
-    color: 0xff9a3d,
-    emissive: 0xff7b1a,
-    emissiveIntensity: 3.2,
-    roughness: 0.35,
-    metalness: 0.05
-  })
-);
-disk.rotation.x = Math.PI * 0.5;
-disk.scale.y = 0.22;
-group.add(disk);
-
-const diskOuterGlow = new THREE.Mesh(
-  new THREE.TorusGeometry(4.35, 1.45, 32, 220),
-  new THREE.MeshBasicMaterial({
-    color: 0xffb347,
-    transparent: true,
-    opacity: 0.18
-  })
-);
-diskOuterGlow.rotation.x = Math.PI * 0.5;
-diskOuterGlow.scale.y = 0.16;
-group.add(diskOuterGlow);
+blackHoleGroup.add(blackHole);
 
 const photonRing = new THREE.Mesh(
   new THREE.TorusGeometry(2.45, 0.16, 24, 180),
@@ -92,7 +69,7 @@ const photonRing = new THREE.Mesh(
   })
 );
 photonRing.rotation.x = Math.PI * 0.5;
-group.add(photonRing);
+blackHoleGroup.add(photonRing);
 
 const lensMaterial = new THREE.ShaderMaterial({
   transparent: true,
@@ -122,7 +99,7 @@ const lensMaterial = new THREE.ShaderMaterial({
       vec3 viewDir = normalize(cameraPosition - vWorldPosition);
       float fresnel = pow(1.0 - max(dot(normalize(vNormal), viewDir), 0.0), 3.0);
       vec3 color = vec3(0.2, 0.4, 0.9) * fresnel;
-      gl_FragColor = vec4(color, fresnel * 0.25);
+      gl_FragColor = vec4(color, fresnel * 0.22);
     }
   `
 });
@@ -131,7 +108,60 @@ const lensShell = new THREE.Mesh(
   new THREE.SphereGeometry(2.9, 128, 128),
   lensMaterial
 );
-group.add(lensShell);
+blackHoleGroup.add(lensShell);
+
+const disk = new THREE.Mesh(
+  new THREE.TorusGeometry(4.2, 1.15, 48, 220),
+  new THREE.MeshStandardMaterial({
+    color: 0xff9a3d,
+    emissive: 0xff7b1a,
+    emissiveIntensity: 3.2,
+    roughness: 0.35,
+    metalness: 0.05
+  })
+);
+disk.rotation.x = Math.PI * 0.5;
+disk.scale.y = 0.08;
+diskGroup.add(disk);
+
+const diskOuterGlow = new THREE.Mesh(
+  new THREE.TorusGeometry(4.35, 1.45, 32, 220),
+  new THREE.MeshBasicMaterial({
+    color: 0xffb347,
+    transparent: true,
+    opacity: 0.18
+  })
+);
+diskOuterGlow.rotation.x = Math.PI * 0.5;
+diskOuterGlow.scale.y = 0.10;
+diskGroup.add(diskOuterGlow);
+
+// Disco duplicado fake para sugerir a curvatura visual do Gargantua
+const upperLensedDisk = new THREE.Mesh(
+  new THREE.TorusGeometry(2.95, 0.28, 24, 180),
+  new THREE.MeshBasicMaterial({
+    color: 0xffd27a,
+    transparent: true,
+    opacity: 0.82
+  })
+);
+upperLensedDisk.rotation.x = Math.PI * 0.5;
+upperLensedDisk.position.y = 0.55;
+upperLensedDisk.scale.set(1.05, 0.16, 0.72);
+diskGroup.add(upperLensedDisk);
+
+const lowerLensedDisk = new THREE.Mesh(
+  new THREE.TorusGeometry(2.95, 0.28, 24, 180),
+  new THREE.MeshBasicMaterial({
+    color: 0xffc45e,
+    transparent: true,
+    opacity: 0.55
+  })
+);
+lowerLensedDisk.rotation.x = Math.PI * 0.5;
+lowerLensedDisk.position.y = -0.55;
+lowerLensedDisk.scale.set(1.05, 0.12, 0.72);
+diskGroup.add(lowerLensedDisk);
 
 function createStars(count = 3500, radius = 220) {
   const geometry = new THREE.BufferGeometry();
@@ -216,12 +246,15 @@ function animate() {
 
   controls.update();
 
-  disk.rotation.z += 0.01;
-  diskOuterGlow.rotation.z -= 0.004;
+  diskGroup.rotation.y += 0.02;
+  disk.rotation.z += 0.0025;
+  diskOuterGlow.rotation.z -= 0.0015;
+
+  upperLensedDisk.material.opacity = 0.76 + Math.sin(t * 1.6) * 0.05;
+  lowerLensedDisk.material.opacity = 0.50 + Math.sin(t * 1.3 + 1.2) * 0.04;
   photonRing.material.opacity = 0.82 + Math.sin(t * 2.0) * 0.08;
   lensMaterial.uniforms.uTime.value = t;
 
-  group.rotation.y += 0.002;
   stars.rotation.y += 0.00015;
 
   renderer.render(scene, camera);
