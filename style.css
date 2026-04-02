@@ -5,7 +5,7 @@ body,
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: #000;
+  background: radial-gradient(circle at center, #05070d 0%, #000000 70%);
 }
 
 canvas {
